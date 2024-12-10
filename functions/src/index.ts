@@ -23,37 +23,32 @@ export const helloWorld = onRequest(
         "https://api.github.com/repos/sprint-9-3/albaform/pulls"
       );
 
-      const pullRequestsURLs = pullRequests.data.map((pr) => [
-        pr.number,
-        pr.url,
-      ]);
-
-      for (const [number, url] of pullRequestsURLs) {
+      for (const { number, url, html_url } of pullRequests.data) {
         const res = await axios.get<PullRequestFile[]>(`${url}/files`);
         const files = res.data;
 
         await db.collection("pullRequests").doc(number.toString()).set({
           number,
           url,
-          status: "completed",
+          htmlUrl: html_url,
         });
 
         const codeRievewPromises = files
           .filter((file) => file.status !== "removed")
           .filter((file) => {
             const REVIEWABLE_EXTENSIONS = [
-              ".js",
-              ".jsx",
-              ".ts",
-              ".tsx",
-              ".css",
-              ".scss",
-              ".sass",
-              ".html",
+              "js",
+              "jsx",
+              "ts",
+              "tsx",
+              "css",
+              "scss",
+              "sass",
+              "html",
             ];
 
-            const ext = "." + file.filename.split(".").pop()?.toLowerCase();
-            return REVIEWABLE_EXTENSIONS.includes(ext);
+            const ext = file.filename.split(".").pop()?.toLowerCase();
+            return REVIEWABLE_EXTENSIONS.includes(ext ?? "");
           })
           .map((file) => file.raw_url)
           .map((codeURL) => reviewCode(codeURL, number.toString()));
@@ -74,7 +69,7 @@ async function reviewCode(codeURL: string, number: string) {
 
   const reviewedCode = await getCodeReviewedByAI(code);
 
-  const result = await db
+  await db
     .collection("pullRequests")
     .doc(number.toString())
     .collection("reviews")
@@ -82,8 +77,6 @@ async function reviewCode(codeURL: string, number: string) {
       fileUrl: codeURL,
       reviewedCode: reviewedCode,
     });
-
-  console.log(result);
 }
 
 async function getCodeReviewedByAI(code: string) {
@@ -108,26 +101,3 @@ async function getCodeReviewedByAI(code: string) {
   });
   return res.choices[0].message.content;
 }
-
-const code = `
-"use client";
-
-import { useModal } from "@/hooks/useModal";
-import Image from "next/image";
-
-const ShareButton = () => {
-  const { openModal } = useModal();
-
-  return (
-    <button
-      className="flex size-[54px] items-center justify-center rounded-full bg-orange-300 shadow-md pc:size-[64px]"
-      onClick={() => openModal("ShareSNSModal")}
-    >
-      <Image src="/icon/link.svg" width={24} height={24} alt="공유하기 버튼" />
-    </button>
-  );
-};
-
-export default ShareButton;`;
-
-getCodeReviewedByAI(code);
