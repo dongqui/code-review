@@ -1,17 +1,17 @@
-import { onRequest } from "firebase-functions/v2/https";
-import { initializeApp } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import * as dotenv from "dotenv";
+import {resolve} from "path";
+import {onRequest} from "firebase-functions/v2/https";
+import {initializeApp} from "firebase-admin/app";
+import {getFirestore} from "firebase-admin/firestore";
 import axios from "axios";
-import { PullRequest, PullRequestFile } from "./types";
-import OpenAI from "openai";
+import {PullRequest, PullRequestFile, OpenAIFile, OpenAIBatch} from "./types";
+
+dotenv.config({path: resolve(__dirname, "../.env")});
 
 initializeApp();
 
 const db = getFirestore();
 
-const openai = new OpenAI({
-  apiKey: "",
-});
 
 export const helloWorld = onRequest(
   {
@@ -23,15 +23,10 @@ export const helloWorld = onRequest(
         "https://api.github.com/repos/sprint-9-3/albaform/pulls"
       );
 
-      for (const { number, url, html_url } of pullRequests.data) {
+      for (const {number, url, html_url} of pullRequests.data) {
         const res = await axios.get<PullRequestFile[]>(`${url}/files`);
         const files = res.data;
 
-        await db.collection("pullRequests").doc(number.toString()).set({
-          number,
-          url,
-          htmlUrl: html_url,
-        });
 
         const codeRievewPromises = files
           .filter((file) => file.status !== "removed")
@@ -50,10 +45,19 @@ export const helloWorld = onRequest(
             const ext = file.filename.split(".").pop()?.toLowerCase();
             return REVIEWABLE_EXTENSIONS.includes(ext ?? "");
           })
-          .map((file) => file.raw_url)
-          .map((codeURL) => reviewCode(codeURL, number.toString()));
+          .map((file) => [file.raw_url, `${number}/${file.filename}`])
+          .map(([codeURL, filename]) => createBatch(codeURL, filename));
 
-        await Promise.allSettled(codeRievewPromises);
+        const batches = await Promise.all(codeRievewPromises);
+        const jsonlString = batches.map((batch) => JSON.stringify(batch)).join("\n");
+
+        await uploadBatchFile(jsonlString);
+
+        await db.collection("pullRequests").doc(number.toString()).set({
+          number,
+          url,
+          htmlUrl: html_url,
+        });
       }
     } catch (error) {
       console.log(error);
@@ -63,41 +67,66 @@ export const helloWorld = onRequest(
   }
 );
 
-async function reviewCode(codeURL: string, number: string) {
+async function createBatch(codeURL: string, filename: string) {
   const res = await axios.get<string>(codeURL);
   const code = res.data;
-
-  const reviewedCode = await getCodeReviewedByAI(code);
-
-  await db
-    .collection("pullRequests")
-    .doc(number.toString())
-    .collection("reviews")
-    .add({
-      fileUrl: codeURL,
-      reviewedCode: reviewedCode,
-    });
+  return batchFactory(filename, code);
 }
 
-async function getCodeReviewedByAI(code: string) {
-  const res = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: `
+function batchFactory(filename: string, code: string) {
+  return {
+    custom_id: filename,
+    method: "POST",
+    url: "/v1/chat/completions",
+    body: {
+      model: "gpt-3.5-turbo",
+      messages: [
+        {role: "system", content: `
           "Please review shortly the following code. Focus on:"
-    "1. Readability: How can the code be improved to be easier to read and understand?"
+      "1. Readability: How can the code be improved to be easier to read and understand?"
     "2. Maintainability: Are there any patterns or practices that could make this code easier to maintain in the long run?"
     "3. Performance: Are there any potential bottlenecks or areas where performance could be improved?"
     "4. Security: Are there any security issues or vulnerabilities in this code?"
-    "5. Best practices: Does this code follow industry best practices?"`,
+    "5. Best practices: Does this code follow industry best practices?"`},
+
+        {
+          role: "user",
+          content: code,
+        },
+      ],
+    },
+  };
+}
+
+async function uploadBatchFile(jsonlString: string) {
+  const blob = new Blob([jsonlString], {type: "application/jsonl"});
+
+  const formData = new FormData();
+  formData.append("purpose", "batch");
+  formData.append("file", blob);
+
+  const batchFileUploadResponse = await axios.post<OpenAIFile>(
+    "https://api.openai.com/v1/files",
+    formData,
+    {
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "multipart/form-data",
       },
-      {
-        role: "user",
-        content: code,
-      },
-    ],
+    }
+  );
+  const batchFileUploadOutput = batchFileUploadResponse.data;
+
+  const batchOutputResponse = await axios.post<OpenAIBatch>("https://api.openai.com/v1/batches", {
+    "input_file_id": batchFileUploadOutput.id,
+    "endpoint": "/v1/chat/completions",
+    "completion_window": "24h",
+  }, {
+    headers: {
+      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
   });
-  return res.choices[0].message.content;
+
+  return batchOutputResponse.data;
 }
