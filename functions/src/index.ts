@@ -41,7 +41,7 @@ export const helloWorld = onSchedule(
         const files = res.data;
 
 
-        const codeRievewPromises = files
+        const codeRievewBatches = files
           .filter((file) => file.status !== "removed")
           .filter((file) => {
             const REVIEWABLE_EXTENSIONS = [
@@ -58,13 +58,11 @@ export const helloWorld = onSchedule(
             const ext = file.filename.split(".").pop()?.toLowerCase();
             return REVIEWABLE_EXTENSIONS.includes(ext ?? "");
           })
-          .map((file) => [file.raw_url, `${number}/${file.filename}`])
-          .map(([codeURL, filename]) => createBatch(codeURL, filename));
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          .map((file) => [`${number}/${file.filename}`, file.patch!])
+          .map(([filename, patchCode]) => createBatch(filename, patchCode));
 
-        const batches = await Promise.all(codeRievewPromises);
-        const jsonlString = batches.map((batch) => JSON.stringify(batch)).join("\n");
-
-
+        const jsonlString = codeRievewBatches.map((batch) => JSON.stringify(batch)).join("\n");
         const codeReviewBatchFromGPT = await uploadBatch(jsonlString);
 
         await db.collection("pullRequests").doc(number.toString()).set({
@@ -82,10 +80,18 @@ export const helloWorld = onSchedule(
   }
 );
 
-async function createBatch(codeURL: string, filename: string) {
-  const res = await axios.get<string>(codeURL);
-  const code = res.data;
-  return batchFactory(filename, code);
+function formattingPatchCode(code: string, ) {
+  return code
+    .split("\n")
+    .filter((line) => line.startsWith("+") && !line.startsWith("+++"))
+    .map((line) => line.substring(1))
+    .filter((line) => !!line)
+    .join();
+}
+
+async function createBatch(filename: string, patchCode: string) {
+  const addedCode = formattingPatchCode(patchCode);
+  return batchFactory(filename, addedCode);
 }
 
 function batchFactory(filename: string, code: string) {
@@ -97,12 +103,16 @@ function batchFactory(filename: string, code: string) {
       model: "gpt-3.5-turbo",
       messages: [
         {role: "system", content: `
-          "Please review shortly the following code. Focus on:"
-      "1. Readability: How can the code be improved to be easier to read and understand?"
-    "2. Maintainability: Are there any patterns or practices that could make this code easier to maintain in the long run?"
-    "3. Performance: Are there any potential bottlenecks or areas where performance could be improved?"
-    "4. Security: Are there any security issues or vulnerabilities in this code?"
-    "5. Best practices: Does this code follow industry best practices?"`},
+          Please provide a concise code review focusing on:
+          1. Readability
+          2. Maintainability
+          3. Performance
+          4. Security
+          5. Best practices
+          6. Web Accessibility (WCAG guidelines)
+          7. Web Standards compliance
+          
+          Keep your response brief and to the point. If you don't find any issues in a particular area, skip it rather than stating there are no issues.`},
 
         {
           role: "user",
