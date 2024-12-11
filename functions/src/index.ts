@@ -1,29 +1,42 @@
 import * as dotenv from "dotenv";
 import {resolve} from "path";
-import {onRequest} from "firebase-functions/v2/https";
+import {onSchedule} from "firebase-functions/v2/scheduler";
 import {initializeApp} from "firebase-admin/app";
-import {getFirestore} from "firebase-admin/firestore";
+import {getFirestore, FieldValue} from "firebase-admin/firestore";
 import axios from "axios";
-import {PullRequest, PullRequestFile, OpenAIFile, OpenAIBatch} from "./types";
+import OpenAI from "openai";
+
+import {PullRequest, PullRequestFile, OpenAIBatch} from "./types";
 
 dotenv.config({path: resolve(__dirname, "../.env")});
 
 initializeApp();
-
 const db = getFirestore();
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-
-export const helloWorld = onRequest(
+export const helloWorld = onSchedule(
   {
-    region: ["asia-northeast3"],
+    schedule: "20 * * * *",
   },
-  async (request, response) => {
+  async () => {
     try {
-      const pullRequests = await axios.get<PullRequest[]>(
+      const twoWeeksAgo = new Date();
+      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+      const pullRequestsResponse = await axios.get<PullRequest[]>(
         "https://api.github.com/repos/sprint-9-3/albaform/pulls"
       );
+      const reeviewedPullRequestsDocs = await db.collection("pullRequests")
+        .where("codeReviewBatchFromGPT", "!=", null)
+        .where("createdAt", ">=", twoWeeksAgo)
+        .get();
 
-      for (const {number, url, html_url} of pullRequests.data) {
+      const reviewedPullRequestsNumbers = reeviewedPullRequestsDocs.docs.map((doc) => doc.data().number);
+      const pullRequestsToReivew = pullRequestsResponse.data.filter((pr) => !(reviewedPullRequestsNumbers.includes(pr.number)));
+
+      for (const {number, url, html_url} of pullRequestsToReivew) {
         const res = await axios.get<PullRequestFile[]>(`${url}/files`);
         const files = res.data;
 
@@ -51,19 +64,21 @@ export const helloWorld = onRequest(
         const batches = await Promise.all(codeRievewPromises);
         const jsonlString = batches.map((batch) => JSON.stringify(batch)).join("\n");
 
-        await uploadBatchFile(jsonlString);
+
+        const codeReviewBatchFromGPT = await uploadBatch(jsonlString);
 
         await db.collection("pullRequests").doc(number.toString()).set({
           number,
           url,
           htmlUrl: html_url,
+          hasReviews: false,
+          codeReviewBatchFromGPT,
+          createdAt: FieldValue.serverTimestamp(),
         });
       }
     } catch (error) {
       console.log(error);
     }
-
-    response.send("Hello from Firebase!");
   }
 );
 
@@ -98,35 +113,58 @@ function batchFactory(filename: string, code: string) {
   };
 }
 
-async function uploadBatchFile(jsonlString: string) {
+async function uploadBatch(jsonlString: string) {
   const blob = new Blob([jsonlString], {type: "application/jsonl"});
+  const file = new File([blob], "batch.jsonl", {type: "application/jsonl", lastModified: Date.now()});
 
-  const formData = new FormData();
-  formData.append("purpose", "batch");
-  formData.append("file", blob);
 
-  const batchFileUploadResponse = await axios.post<OpenAIFile>(
-    "https://api.openai.com/v1/files",
-    formData,
-    {
-      headers: {
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "multipart/form-data",
-      },
-    }
-  );
-  const batchFileUploadOutput = batchFileUploadResponse.data;
-
-  const batchOutputResponse = await axios.post<OpenAIBatch>("https://api.openai.com/v1/batches", {
-    "input_file_id": batchFileUploadOutput.id,
-    "endpoint": "/v1/chat/completions",
-    "completion_window": "24h",
-  }, {
-    headers: {
-      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
+  const batchFileUploadOutput = await openai.files.create({
+    file,
+    purpose: "batch",
   });
 
-  return batchOutputResponse.data;
+  const batch = await openai.batches.create({
+    input_file_id: batchFileUploadOutput.id,
+    endpoint: "/v1/chat/completions",
+    completion_window: "24h",
+  });
+
+  return batch;
 }
+
+
+export const getReviewsScheduler = onSchedule(
+  {
+    schedule: "25 * * * *",
+  },
+  async () => {
+    const unReviewedPullRequestDocs = await db.collection("pullRequests").where("hasReviews", "==", false).get();
+    for (const doc of unReviewedPullRequestDocs.docs) {
+      const pullRequest = doc.data();
+      const batch: OpenAIBatch = pullRequest.codeReviewBatchFromGPT;
+
+      const updatedBatch = await openai.batches.retrieve(batch.id);
+      if (updatedBatch?.status === "completed" && updatedBatch.output_file_id) {
+        const content = await openai.files.content(updatedBatch.output_file_id);
+        const buffer = Buffer.from(await content.arrayBuffer());
+        const jsonl = buffer.toString("utf-8");
+        const reviews = jsonl.split("\n").filter((line) => !!line).map((line) => JSON.parse(line));
+
+        const dbBatch = db.batch();
+        reviews.forEach((review) => dbBatch.create(db.collection("reviews").doc(), {
+          pullRequestNumber: pullRequest.number,
+          review,
+        }));
+
+        dbBatch.update(db.collection("pullRequests").doc(pullRequest.number.toString()), ({
+          hasReviews: true,
+          codeReviewBatchFromGPT: updatedBatch,
+        }));
+
+        await dbBatch.commit();
+      }
+    }
+  }
+);
+
+
