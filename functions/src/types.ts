@@ -176,3 +176,46 @@ export interface PullRequestFile {
   contents_url: string;
   patch?: string; // 선택적으로 포함될 수 있음
 }
+
+export interface OpenAIFile {
+  id: string;
+  object: "file";
+  bytes: number;
+  created_at: number;
+  filename: string;
+  purpose: "fine-tune" | "assistants" | "answers" | "classifications" | "search" | "batch";
+}
+
+interface RequestCounts {
+  total: number;
+  completed: number;
+  failed: number;
+}
+
+interface BatchMetadata {
+  customer_id: string;
+  batch_description: string;
+}
+
+export interface OpenAIBatch {
+  id: string;
+  object: "batch";
+  endpoint: string;
+  errors: null | any[];
+  input_file_id: string;
+  completion_window: string;
+  status: "validating" | "queued" | "processing" | "completed" | "failed" | "cancelled" | "expired";
+  output_file_id: string | null;
+  error_file_id: string | null;
+  created_at: number;
+  in_progress_at: number | null;
+  expires_at: number | null;
+  finalizing_at: number | null;
+  completed_at: number | null;
+  failed_at: number | null;
+  expired_at: number | null;
+  cancelling_at: number | null;
+  cancelled_at: number | null;
+  request_counts: RequestCounts;
+  metadata?: BatchMetadata;
+}
