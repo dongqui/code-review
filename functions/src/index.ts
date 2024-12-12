@@ -126,7 +126,7 @@ function batchFactory(filename: string, code: string) {
           6. Web Accessibility (WCAG guidelines)
           7. Web Standards compliance
           
-          Keep your response brief and to the point. If you don't find any issues in a particular area, skip it rather than stating there are no issues.`,
+          Keep your response brief and to the point. If you don't find any issues in a particular area, skip it rather than stating there are no issues.respond in Korean.`,
         },
 
         {
