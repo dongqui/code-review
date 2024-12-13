@@ -4,23 +4,28 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && cp manifest.json dist/",
+    "build": "tsc && vite build && copyfiles manifest.json dist",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "firebase": "^11.0.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@types/chrome": "^0.0.254",
+    "@types/node": "^22.10.2",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "@types/chrome": "^0.0.254",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "@vitejs/plugin-react": "^4.2.0",
-    "typescript": "^5.0.0",
-    "vite": "^5.0.0",
+    "copyfiles": "^2.4.1",
     "eslint": "^8.56.0",
-    "eslint-plugin-react": "^7.33.2"
+    "eslint-plugin-react": "^7.33.2",
+    "typescript": "^5.0.0",
+    "vite": "^5.0.0"
   }
-} 
+}
