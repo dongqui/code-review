@@ -1,5 +1,12 @@
 {
   "projects": {
     "default": "code-review-b1f5c"
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "region": "asia-northeast3"
   }
 }
