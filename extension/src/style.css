@@ -1,0 +1,7 @@
+.honey_code_review_container {
+  position: fixed;
+  top: 110px;
+  background-color: black;
+  color: white;
+  width: 50%;
+}

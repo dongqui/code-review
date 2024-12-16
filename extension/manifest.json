@@ -5,12 +5,13 @@
   "description": "AI-powered code review assistant for Pull Requests",
   "permissions": ["activeTab", "scripting", "tabs"],
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": ""
   },
   "content_scripts": [
     {
       "matches": ["https://github.com/*"],
-      "js": ["contentScript.js"]
+      "js": ["contentScript.js"],
+      "css": ["style.css"]
     }
   ]
 }

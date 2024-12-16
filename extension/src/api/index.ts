@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { collection, getDocs, query, where } from "firebase/firestore";
+import type { Review } from "../types";
 
 export default async function getCodeReviews(pullRequestNumber: number) {
   const q = query(
@@ -7,5 +8,6 @@ export default async function getCodeReviews(pullRequestNumber: number) {
     where("pullRequestNumber", "==", pullRequestNumber)
   );
   const docs = await getDocs(q);
-  return docs.docs.map((doc) => doc.data());
+
+  return docs.docs.map((doc) => doc.data()) as Review[];
 }
