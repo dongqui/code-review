@@ -1,5 +1,4 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
 
@@ -7,22 +6,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export default defineConfig({
-  plugins: [
-    react({
-      jsxImportSource: "@emotion/react",
-      babel: {
-        plugins: ["@emotion/babel-plugin"]
-      }
-    })
-  ],
   build: {
-    outDir: "dist",
+    cssCodeSplit: false,
     rollupOptions: {
       input: {
-        popup: resolve(__dirname, "popup.html"),
+        contentScript: resolve(__dirname, "src/contentScript.ts"),
       },
       output: {
         entryFileNames: "[name].js",
+        assetFileNames: (assetInfo) => {
+          return "[name].[ext]";
+        },
+        format: "iife",
       },
     },
   },
