@@ -6,6 +6,21 @@ import "./style.css";
 const $container = document.createElement("div");
 $container.classList.add("honey_code_review_container");
 
+const $content = document.createElement("div");
+
+// 토글 버튼 생성
+const $toggleButton = document.createElement("button");
+$toggleButton.classList.add("toggle_button");
+$toggleButton.innerHTML = "▼"; // 초기 상태는 펼쳐진 상태
+
+// 토글 버튼 클릭 이벤트
+$toggleButton.addEventListener("click", () => {
+  const isCollapsed = $container.classList.toggle("collapsed");
+  $toggleButton.innerHTML = isCollapsed ? "▲" : "▼";
+});
+
+$container.appendChild($content);
+$container.appendChild($toggleButton);
 document.body.appendChild($container);
 
 const handleChangePullNumber = _handleChangePullNumber();
@@ -50,7 +65,7 @@ function _handleChangeFile() {
     if (previousPath !== currentPath) {
       const targetFileName = findTargetFileName();
       if (targetFileName) {
-        $container.innerHTML =
+        $content.innerHTML =
           review.getByFileName(targetFileName)?.replaceAll("\n", "<br/>") ||
           "No file";
       }

@@ -1,7 +1,35 @@
 .honey_code_review_container {
   position: fixed;
   top: 110px;
+  width: 50%;
+  max-height: 400px;
   background-color: black;
   color: white;
-  width: 50%;
+  border-radius: 8px;
+  padding: 16px;
+  transition: all 0.3s ease;
+  overflow: auto;
+}
+
+.honey_code_review_container.collapsed {
+  max-height: 40px;
+  overflow: hidden;
+}
+
+.toggle_button {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 12px;
+  background-color: #f0f0f0;
+  border-radius: 4px;
+}
+
+.toggle_button:hover {
+  background-color: yellow;
+  border-radius: 4px;
 }
