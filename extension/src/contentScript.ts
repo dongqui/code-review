@@ -7,16 +7,17 @@ const $container = document.createElement("div");
 $container.classList.add("honey_code_review_container");
 
 const $content = document.createElement("div");
+$content.classList.add("honey_code_review_content");
 
 // 토글 버튼 생성
 const $toggleButton = document.createElement("button");
 $toggleButton.classList.add("toggle_button");
-$toggleButton.innerHTML = "▼"; // 초기 상태는 펼쳐진 상태
+$toggleButton.textContent = "▼"; // 초기 상태는 펼쳐진 상태
 
 // 토글 버튼 클릭 이벤트
 $toggleButton.addEventListener("click", () => {
-  const isCollapsed = $container.classList.toggle("collapsed");
-  $toggleButton.innerHTML = isCollapsed ? "▲" : "▼";
+  const isCollapsed = $content.classList.toggle("collapsed");
+  $toggleButton.textContent = isCollapsed ? "▲" : "▼";
 });
 
 $container.appendChild($content);
@@ -28,8 +29,13 @@ const handleChangeFile = _handleChangeFile();
 
 const review = {
   list: [] as Review[],
+  isLoading: false,
   async fetchList(pullRequestNumber: number) {
+    review.isLoading = true;
     review.list = await getCodeReviews(pullRequestNumber);
+    review.isLoading = false;
+
+    updateContent();
   },
   getByFileName(targetFileName: string) {
     return review.list.find((r) => {
@@ -45,11 +51,8 @@ function _handleChangePullNumber() {
   return async () => {
     const currentPullNumber = extractPullNumberFromURL();
 
-    if (
-      previousPullNumber !== currentPullNumber &&
-      currentPullNumber !== null
-    ) {
-      await review.fetchList(currentPullNumber);
+    if (previousPullNumber !== currentPullNumber) {
+      updateReviewList(currentPullNumber);
       previousPullNumber = currentPullNumber;
     }
   };
@@ -63,14 +66,30 @@ function _handleChangeFile() {
     const currentPath = window.location.href;
 
     if (previousPath !== currentPath) {
-      const targetFileName = findTargetFileName();
-      if (targetFileName) {
-        $content.innerHTML =
-          review.getByFileName(targetFileName)?.replaceAll("\n", "<br/>") ||
-          "No file";
-      }
+      updateContent();
+
+      previousPath = currentPath;
     }
   };
+}
+
+async function updateReviewList(currentPullNumber: number | null) {
+  if (currentPullNumber !== null) {
+    await review.fetchList(currentPullNumber);
+  } else {
+    review.list = [];
+  }
+}
+
+function updateContent() {
+  const targetFileName = findTargetFileName();
+  if (review.isLoading) {
+    $content.textContent = "Loading...";
+  } else if (review.list.length === 0) {
+    $content.textContent = "No reviews";
+  } else if (targetFileName) {
+    $content.textContent = review.getByFileName(targetFileName) || "No file";
+  }
 }
 
 function findTargetFileName() {
@@ -100,4 +119,11 @@ function onChangeURL() {
   });
 }
 
-onChangeURL();
+function init() {
+  const currentPullNumber = extractPullNumberFromURL();
+  updateReviewList(currentPullNumber);
+
+  onChangeURL();
+}
+
+init();
