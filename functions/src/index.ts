@@ -29,7 +29,7 @@ export const helloWorld = onSchedule(
       twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
 
       const pullRequestsResponse = await axios.get<PullRequest[]>(
-        "https://api.github.com/repos/sprint-9-3/albaform/pulls"
+        "https://api.github.com/repos/codeit-bootcamp-frontend/14-Sprint-Mission/pulls"
       );
 
       const reeviewedPullRequestsDocs = await db
@@ -112,21 +112,13 @@ function batchFactory(filename: string, code: string) {
     method: "POST",
     url: "/v1/chat/completions",
     body: {
-      model: "gpt-3.5-turbo",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
           content: `
-          Please provide a concise code review focusing on:
-          1. Readability
-          2. Maintainability
-          3. Performance
-          4. Security
-          5. Best practices
-          6. Web Accessibility (WCAG guidelines)
-          7. Web Standards compliance
-          
-          Keep your response brief and to the point. If you don't find any issues in a particular area, skip it rather than stating there are no issues.respond in Korean.`,
+            웹 접근성, 웹 표준, 가독성, 성능, 보안을 중점으로 코드 리뷰 해줘. 간결하게 해.
+          `,
         },
 
         {
