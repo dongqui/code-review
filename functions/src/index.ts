@@ -67,6 +67,7 @@ export const helloWorld = onSchedule(
             const ext = file.filename.split(".").pop()?.toLowerCase();
             return REVIEWABLE_EXTENSIONS.includes(ext ?? "");
           })
+          .filter((file) => file.patch)
           // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           .map((file) => [`${number}/${file.filename}`, file.patch!])
           .map(([filename, patchCode]) => createBatch(filename, patchCode));
